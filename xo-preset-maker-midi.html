@@ -1,0 +1,875 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>MIDI to XO Preset Converter</title>
+<style>
+:root{
+  --bg:#0d1117;
+  --panel:#151b23;
+  --panel2:#1b2430;
+  --border:#2a3544;
+  --text:#eef4ff;
+  --muted:#9fb0c3;
+  --accent:#6ea8fe;
+  --good:#55d68b;
+  --warn:#ffcc66;
+  --bad:#ff7b72;
+  --shadow:0 14px 40px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+body{
+  margin:0;
+  font-family:Inter,system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif;
+  background:linear-gradient(180deg,#0a0e13,#0d1117 24%,#101720);
+  color:var(--text);
+  min-height:100vh;
+}
+.wrap{
+  width:min(1180px,calc(100% - 28px));
+  margin:28px auto 60px;
+}
+.hero{
+  padding:26px 28px;
+  border:1px solid var(--border);
+  border-radius:20px;
+  background:linear-gradient(135deg,#151b23,#101720);
+  box-shadow:var(--shadow);
+  margin-bottom:18px;
+}
+h1{margin:0 0 8px;font-size:clamp(28px,4vw,46px);letter-spacing:-.03em}
+.hero p{margin:0;color:var(--muted);line-height:1.6;max-width:920px}
+.grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:18px;
+}
+@media(max-width:850px){.grid{grid-template-columns:1fr}}
+.card{
+  background:rgba(21,27,35,.95);
+  border:1px solid var(--border);
+  border-radius:18px;
+  box-shadow:var(--shadow);
+  overflow:hidden;
+}
+.card h2{
+  font-size:17px;
+  margin:0;
+  padding:18px 20px;
+  border-bottom:1px solid var(--border);
+}
+.card .body{padding:20px}
+.drop{
+  border:1.5px dashed #41536a;
+  background:#101720;
+  border-radius:14px;
+  padding:24px;
+  text-align:center;
+  cursor:pointer;
+  transition:.18s ease;
+}
+.drop:hover,.drop.drag{border-color:var(--accent);background:#132033}
+.drop strong{display:block;margin-bottom:7px}
+.drop small{color:var(--muted);line-height:1.5}
+input[type=file]{display:none}
+label.small{
+  display:block;
+  color:var(--muted);
+  font-size:12px;
+  margin:0 0 7px;
+}
+input[type=text],select,input[type=number]{
+  width:100%;
+  background:#0f151d;
+  color:var(--text);
+  border:1px solid #344356;
+  border-radius:10px;
+  padding:10px 11px;
+  outline:none;
+}
+input:focus,select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(110,168,254,.12)}
+.row{display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-top:14px}
+@media(max-width:600px){.row{grid-template-columns:1fr}}
+button{
+  border:0;
+  border-radius:11px;
+  padding:11px 15px;
+  font-weight:750;
+  cursor:pointer;
+  background:#263244;
+  color:var(--text);
+}
+button.primary{background:var(--accent);color:#08111d}
+button.good{background:var(--good);color:#07150c}
+button:disabled{opacity:.45;cursor:not-allowed}
+.actions{display:flex;gap:10px;flex-wrap:wrap;margin-top:16px}
+.status{
+  margin-top:14px;
+  padding:11px 13px;
+  border-radius:10px;
+  background:#101720;
+  color:var(--muted);
+  border:1px solid var(--border);
+  font-size:13px;
+  line-height:1.5;
+}
+.status.good{color:#bff7d4;border-color:#2f6a47}
+.status.bad{color:#ffd0cc;border-color:#7a3732}
+table{
+  width:100%;
+  border-collapse:collapse;
+  font-size:13px;
+}
+th,td{
+  border-bottom:1px solid var(--border);
+  padding:10px 8px;
+  text-align:left;
+  vertical-align:middle;
+}
+th{color:#b9c8d9;font-size:11px;text-transform:uppercase;letter-spacing:.06em}
+td select{min-width:145px}
+.note-chip{
+  display:inline-flex;
+  gap:7px;
+  align-items:center;
+  padding:5px 8px;
+  border-radius:999px;
+  background:#202b39;
+}
+.count{color:var(--muted)}
+.full{grid-column:1/-1}
+.scroll{overflow:auto}
+.mapping-ref{
+  display:grid;
+  grid-template-columns:repeat(4,1fr);
+  gap:8px;
+}
+@media(max-width:800px){.mapping-ref{grid-template-columns:repeat(2,1fr)}}
+.mapbox{
+  background:#101720;
+  border:1px solid var(--border);
+  border-radius:10px;
+  padding:10px;
+}
+.mapbox b{display:block;font-size:13px}
+.mapbox span{color:var(--muted);font-size:12px}
+.badge{
+  display:inline-block;
+  padding:4px 8px;
+  border-radius:999px;
+  font-size:11px;
+  background:#20324b;
+  color:#cfe1ff;
+  margin-left:6px;
+}
+.footer{
+  color:#7f91a5;
+  font-size:12px;
+  margin-top:18px;
+  line-height:1.6;
+}
+.toggle{
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:var(--muted);
+  font-size:13px;
+  margin-top:13px;
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <section class="hero">
+    <h1>MIDI → XO Preset Converter</h1>
+    <p>Load one or more drum MIDI files, detect every MIDI note used, map each note to an XO lane, and generate two XO presets per four-bar MIDI: Bars 1–2 and Bars 3–4. Everything runs locally in your browser.</p>
+  </section>
+
+  <div class="grid">
+    <section class="card">
+      <h2>1. Load MIDI files</h2>
+      <div class="body">
+        <div id="midiDrop" class="drop">
+          <strong>Drop MIDI files here</strong>
+          <small>or click to choose one or more .mid / .midi files</small>
+        </div>
+        <input id="midiInput" type="file" accept=".mid,.midi,audio/midi,audio/x-midi" multiple>
+        <div id="midiStatus" class="status">No MIDI files loaded.</div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>2. Load a working XO preset template</h2>
+      <div class="body">
+        <div id="xoDrop" class="drop">
+          <strong>Drop one working .XOPreset here</strong>
+          <small>The converter keeps its existing XO structure and replaces only sequencer grid values and preset tempo.</small>
+        </div>
+        <input id="xoInput" type="file" accept=".XOPreset,.xopreset,text/plain">
+        <div id="xoStatus" class="status">No XO template loaded.</div>
+      </div>
+    </section>
+
+    <section class="card full">
+      <h2>3. Detected notes & mapping <span class="badge">editable</span></h2>
+      <div class="body">
+        <div class="actions" style="margin-top:0;margin-bottom:14px">
+          <button id="applyBap">Apply BAP GPT mapping</button>
+          <button id="clearMap">Clear mapping</button>
+        </div>
+        <div class="scroll">
+          <table>
+            <thead>
+              <tr>
+                <th>MIDI</th>
+                <th>Note</th>
+                <th>Hits</th>
+                <th>XO destination</th>
+              </tr>
+            </thead>
+            <tbody id="noteRows">
+              <tr><td colspan="4" style="color:#9fb0c3">Load MIDI files to detect notes.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4. Output settings</h2>
+      <div class="body">
+        <label class="small">Filename prefix</label>
+        <input id="prefix" type="text" value="BAPGPT">
+
+        <div class="row">
+          <div>
+            <label class="small">First sequence number</label>
+            <input id="startNumber" type="number" min="1" step="1" value="1">
+          </div>
+          <div>
+            <label class="small">Number padding</label>
+            <select id="padding">
+              <option value="2">01</option>
+              <option value="3">001</option>
+              <option value="4" selected>0001</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="row">
+          <div>
+            <label class="small">Quantization</label>
+            <select id="quantize">
+              <option value="nearest" selected>Nearest 16th</option>
+              <option value="floor">Earlier 16th</option>
+              <option value="ceil">Later 16th</option>
+            </select>
+          </div>
+          <div>
+            <label class="small">Collision handling</label>
+            <select id="collision">
+              <option value="max" selected>Keep highest velocity</option>
+              <option value="last">Keep last hit</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="toggle">
+          <input id="useMidiNames" type="checkbox">
+          Use original MIDI filenames instead of sequence numbers
+        </label>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>XO visible slot reference</h2>
+      <div class="body">
+        <div class="mapping-ref">
+          <div class="mapbox"><b>Flex 2</b><span>Internal Slot 8</span></div>
+          <div class="mapbox"><b>Flex 1</b><span>Internal Slot 7</span></div>
+          <div class="mapbox"><b>Open Hat</b><span>Internal Slot 6</span></div>
+          <div class="mapbox"><b>Closed Hat</b><span>Internal Slot 5</span></div>
+          <div class="mapbox"><b>Clap</b><span>Internal Slot 4</span></div>
+          <div class="mapbox"><b>Snare</b><span>Internal Slot 3</span></div>
+          <div class="mapbox"><b>Kick 2</b><span>Internal Slot 2</span></div>
+          <div class="mapbox"><b>Kick 1</b><span>Internal Slot 1</span></div>
+        </div>
+      </div>
+    </section>
+
+    <section class="card full">
+      <h2>5. Convert</h2>
+      <div class="body">
+        <div class="actions" style="margin-top:0">
+          <button id="convertBtn" class="good" disabled>Generate XO presets</button>
+          <button id="downloadAllBtn" class="primary" disabled>Download ZIP</button>
+        </div>
+        <div id="convertStatus" class="status">Load MIDI files and an XO template to begin.</div>
+        <div id="outputList" class="footer"></div>
+      </div>
+    </section>
+  </div>
+
+  <div class="footer">
+    This tool does not upload your MIDI or XO preset files anywhere. It reads them in your browser. MIDI note timing is converted to XO's 16-step grid, so off-grid microtiming is quantized.
+  </div>
+</div>
+
+<script>
+(() => {
+  "use strict";
+
+  const XO_DESTINATIONS = [
+    ["ignore","Ignore"],
+    ["1","Kick 1"],
+    ["2","Kick 2"],
+    ["3","Snare"],
+    ["4","Clap"],
+    ["5","Closed Hat"],
+    ["6","Open Hat"],
+    ["7","Flex 1"],
+    ["8","Flex 2"]
+  ];
+
+  const BAP_GPT_MAP = {
+    36:"1",
+    37:"8",
+    38:"3",
+    39:"4",
+    40:"7",
+    42:"5",
+    44:"5",
+    46:"6"
+  };
+
+  let midiFiles = [];
+  let parsedMidis = [];
+  let templateText = "";
+  let generated = [];
+
+  const $ = id => document.getElementById(id);
+
+  function setupDrop(dropId, inputId, handler){
+    const drop = $(dropId), input = $(inputId);
+    drop.addEventListener("click", () => input.click());
+    input.addEventListener("change", () => handler([...input.files]));
+    ["dragenter","dragover"].forEach(evt => drop.addEventListener(evt, e => {
+      e.preventDefault(); drop.classList.add("drag");
+    }));
+    ["dragleave","drop"].forEach(evt => drop.addEventListener(evt, e => {
+      e.preventDefault(); drop.classList.remove("drag");
+    }));
+    drop.addEventListener("drop", e => handler([...e.dataTransfer.files]));
+  }
+
+  function readFileArrayBuffer(file){
+    return new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsArrayBuffer(file);
+    });
+  }
+
+  function readFileText(file){
+    return new Promise((resolve,reject)=>{
+      const r = new FileReader();
+      r.onload = () => resolve(r.result);
+      r.onerror = reject;
+      r.readAsText(file);
+    });
+  }
+
+  function u16(v,o){ return (v[o]<<8)|v[o+1]; }
+  function u32(v,o){ return ((v[o]<<24)>>>0)|(v[o+1]<<16)|(v[o+2]<<8)|v[o+3]; }
+
+  function readVLQ(bytes, state){
+    let value = 0, b, count = 0;
+    do{
+      if(state.pos >= bytes.length) throw new Error("Unexpected end of MIDI while reading variable-length value.");
+      b = bytes[state.pos++];
+      value = (value<<7) | (b & 0x7f);
+      count++;
+      if(count > 4) throw new Error("Invalid MIDI variable-length value.");
+    }while(b & 0x80);
+    return value >>> 0;
+  }
+
+  function parseMidi(buffer){
+    const bytes = new Uint8Array(buffer);
+    const text4 = o => String.fromCharCode(bytes[o],bytes[o+1],bytes[o+2],bytes[o+3]);
+
+    if(text4(0)!=="MThd") throw new Error("Not a Standard MIDI File.");
+    const headerLen = u32(bytes,4);
+    const format = u16(bytes,8);
+    const tracks = u16(bytes,10);
+    const division = u16(bytes,12);
+
+    if(division & 0x8000) throw new Error("SMPTE-timed MIDI is not supported yet.");
+    const ticksPerBeat = division;
+
+    let pos = 8 + headerLen;
+    let notes = [];
+    let tempos = [{tick:0, mpqn:500000}];
+
+    for(let t=0;t<tracks;t++){
+      if(text4(pos)!=="MTrk") throw new Error("Invalid MIDI track chunk.");
+      const len = u32(bytes,pos+4);
+      pos += 8;
+      const end = pos + len;
+      let tick = 0;
+      let runningStatus = null;
+
+      while(pos < end){
+        const st = {pos};
+        const delta = readVLQ(bytes,st);
+        pos = st.pos;
+        tick += delta;
+
+        let status = bytes[pos];
+        if(status < 0x80){
+          if(runningStatus === null) throw new Error("Invalid running status.");
+          status = runningStatus;
+        }else{
+          pos++;
+          if(status < 0xF0) runningStatus = status;
+        }
+
+        if(status === 0xFF){
+          const metaType = bytes[pos++];
+          const s = {pos};
+          const metaLen = readVLQ(bytes,s);
+          pos = s.pos;
+          if(metaType === 0x51 && metaLen === 3){
+            const mpqn = (bytes[pos]<<16)|(bytes[pos+1]<<8)|bytes[pos+2];
+            tempos.push({tick,mpqn});
+          }
+          pos += metaLen;
+          runningStatus = null;
+          continue;
+        }
+
+        if(status === 0xF0 || status === 0xF7){
+          const s = {pos};
+          const syxLen = readVLQ(bytes,s);
+          pos = s.pos + syxLen;
+          runningStatus = null;
+          continue;
+        }
+
+        const type = status & 0xF0;
+        const channel = status & 0x0F;
+
+        if(type === 0x80 || type === 0x90 || type === 0xA0 || type === 0xB0 || type === 0xE0){
+          const d1 = bytes[pos++], d2 = bytes[pos++];
+          if(type === 0x90 && d2 > 0){
+            notes.push({tick,note:d1,velocity:d2,channel});
+          }
+        }else if(type === 0xC0 || type === 0xD0){
+          pos += 1;
+        }else{
+          throw new Error("Unsupported MIDI event 0x"+status.toString(16));
+        }
+      }
+      pos = end;
+    }
+
+    tempos.sort((a,b)=>a.tick-b.tick);
+    return {format,tracks,ticksPerBeat,notes,tempos};
+  }
+
+  function midiNoteName(note){
+    const names = ["C","C#","D","D#","E","F","F#","G","G#","A","A#","B"];
+    const octave = Math.floor(note/12)-2; // matches user's C1 = MIDI 36 convention
+    return names[note%12] + octave;
+  }
+
+  function tempoAtStart(parsed){
+    let mpqn = 500000;
+    for(const t of parsed.tempos){
+      if(t.tick <= 0) mpqn = t.mpqn;
+    }
+    return 60000000 / mpqn;
+  }
+
+  async function handleMidis(files){
+    files = files.filter(f => /\.midi?$/i.test(f.name));
+    if(!files.length){
+      setStatus("midiStatus","No valid MIDI files selected.",false);
+      return;
+    }
+
+    midiFiles = files;
+    parsedMidis = [];
+    let failures = [];
+
+    for(const file of files){
+      try{
+        const buf = await readFileArrayBuffer(file);
+        parsedMidis.push({file,parsed:parseMidi(buf)});
+      }catch(err){
+        failures.push(file.name + ": " + err.message);
+      }
+    }
+
+    if(parsedMidis.length){
+      setStatus("midiStatus", `${parsedMidis.length} MIDI file(s) loaded${failures.length ? `; ${failures.length} failed` : ""}.`, true);
+      rebuildNoteRows();
+    }else{
+      setStatus("midiStatus","Could not parse the selected MIDI files.",false);
+    }
+
+    updateReady();
+  }
+
+  async function handleXO(files){
+    const file = files[0];
+    if(!file) return;
+    try{
+      templateText = await readFileText(file);
+
+      const gridRegex = /GUI_Seq_SLOT\d{2}_[AB]_Wanted_GridVel[0-9A-F]\s*=\s*[0-9.eE+-]+\s*,/;
+      if(!gridRegex.test(templateText)){
+        throw new Error("The file does not contain the expected XO sequencer grid fields.");
+      }
+      setStatus("xoStatus", `Template loaded: ${file.name}`, true);
+    }catch(err){
+      templateText = "";
+      setStatus("xoStatus", err.message, false);
+    }
+    updateReady();
+  }
+
+  function setStatus(id,msg,good){
+    const el=$(id);
+    el.textContent=msg;
+    el.className="status " + (good ? "good" : "bad");
+  }
+
+  function rebuildNoteRows(){
+    const totals = new Map();
+    for(const m of parsedMidis){
+      for(const n of m.parsed.notes){
+        totals.set(n.note,(totals.get(n.note)||0)+1);
+      }
+    }
+
+    const tbody=$("noteRows");
+    tbody.innerHTML="";
+
+    [...totals.keys()].sort((a,b)=>a-b).forEach(note=>{
+      const tr=document.createElement("tr");
+      const current = localStorage.getItem("xoMap_"+note) || BAP_GPT_MAP[note] || "ignore";
+      tr.innerHTML = `
+        <td><span class="note-chip">${note}</span></td>
+        <td>${midiNoteName(note)}</td>
+        <td class="count">${totals.get(note)}</td>
+        <td><select data-note="${note}">
+          ${XO_DESTINATIONS.map(([v,l])=>`<option value="${v}" ${v===current?"selected":""}>${l}</option>`).join("")}
+        </select></td>`;
+      tbody.appendChild(tr);
+    });
+
+    tbody.querySelectorAll("select").forEach(sel=>{
+      sel.addEventListener("change",()=>{
+        localStorage.setItem("xoMap_"+sel.dataset.note, sel.value);
+      });
+    });
+  }
+
+  function getMapping(){
+    const map={};
+    document.querySelectorAll("#noteRows select[data-note]").forEach(sel=>{
+      if(sel.value!=="ignore") map[Number(sel.dataset.note)] = Number(sel.value);
+    });
+    return map;
+  }
+
+  function applyBapMap(){
+    document.querySelectorAll("#noteRows select[data-note]").forEach(sel=>{
+      const note=Number(sel.dataset.note);
+      sel.value = BAP_GPT_MAP[note] || "ignore";
+      localStorage.setItem("xoMap_"+note,sel.value);
+    });
+  }
+
+  function clearMap(){
+    document.querySelectorAll("#noteRows select[data-note]").forEach(sel=>{
+      sel.value="ignore";
+      localStorage.setItem("xoMap_"+sel.dataset.note,"ignore");
+    });
+  }
+
+  function quantizeStep(x, mode){
+    if(mode==="floor") return Math.floor(x);
+    if(mode==="ceil") return Math.ceil(x);
+    return Math.floor(x+0.5);
+  }
+
+  function buildGrid(parsed, mapping, pairStartBar){
+    const tpq = parsed.ticksPerBeat;
+    const ticksPerBar = tpq * 4;
+    const ticksPerStep = ticksPerBar / 16;
+    const pairStart = pairStartBar * ticksPerBar;
+    const pairEnd = pairStart + 2*ticksPerBar;
+    const qmode = $("quantize").value;
+    const collision = $("collision").value;
+
+    const grid = {};
+    for(let slot=1;slot<=8;slot++){
+      for(const pat of ["A","B"]){
+        for(let step=0;step<16;step++){
+          grid[`${slot}_${pat}_${step}`]=0;
+        }
+      }
+    }
+
+    for(const ev of parsed.notes){
+      const slot = mapping[ev.note];
+      if(!slot) continue;
+      if(ev.tick < pairStart || ev.tick >= pairEnd) continue;
+
+      const rel = ev.tick - pairStart;
+      const barInPair = Math.floor(rel/ticksPerBar);
+      const tickInBar = rel - barInPair*ticksPerBar;
+      let step = quantizeStep(tickInBar/ticksPerStep,qmode);
+      if(step < 0 || step > 15) continue;
+
+      const pat = barInPair===0 ? "A" : "B";
+      const key = `${slot}_${pat}_${step}`;
+      const vel = ev.velocity/127;
+
+      if(collision==="max") grid[key]=Math.max(grid[key],vel);
+      else grid[key]=vel;
+    }
+    return grid;
+  }
+
+  function renderPreset(grid,bpm){
+    const re = /(GUI_Seq_SLOT(\d{2})_([AB])_Wanted_GridVel([0-9A-F])\s*=\s*)([0-9.eE+-]+)(\s*,)/g;
+
+    let out = templateText.replace(re,(full,prefix,slotText,pat,hexStep,oldVal,suffix)=>{
+      const slot=Number(slotText);
+      const step=parseInt(hexStep,16);
+      const v=grid[`${slot}_${pat}_${step}`] || 0;
+      const val = v===0 ? "0" : v.toFixed(9).replace(/0+$/,"").replace(/\.$/,"");
+      return prefix + val + suffix;
+    });
+
+    if(/GUI_Seq_PresetTempo\s*=/.test(out)){
+      const bpmText = Math.abs(bpm-Math.round(bpm))<1e-9
+        ? String(Math.round(bpm))
+        : bpm.toFixed(6).replace(/0+$/,"").replace(/\.$/,"");
+      out = out.replace(/GUI_Seq_PresetTempo\s*=\s*[0-9.eE+-]+\s*,/, `GUI_Seq_PresetTempo = ${bpmText},`);
+    }
+    return out;
+  }
+
+  function safeBaseName(name){
+    return name.replace(/\.[^.]+$/,"").replace(/[^A-Za-z0-9_-]+/g,"_").replace(/^_+|_+$/g,"") || "MIDI";
+  }
+
+  function generate(){
+    if(!parsedMidis.length || !templateText) return;
+
+    const mapping=getMapping();
+    if(!Object.keys(mapping).length){
+      setStatus("convertStatus","No MIDI notes are mapped to XO lanes.",false);
+      return;
+    }
+
+    generated=[];
+    const prefix=safeBaseName($("prefix").value.trim() || "XO");
+    const start=Math.max(1,parseInt($("startNumber").value||"1",10));
+    const pad=Math.max(1,parseInt($("padding").value,10));
+    const useNames=$("useMidiNames").checked;
+
+    parsedMidis.forEach((item,index)=>{
+      const bpm=tempoAtStart(item.parsed);
+      const ident = useNames
+        ? safeBaseName(item.file.name)
+        : String(start+index).padStart(pad,"0");
+      const base = useNames ? `${prefix}_${ident}` : `${prefix}_${ident}`;
+
+      [
+        {firstBar:0,label:"1-2"},
+        {firstBar:2,label:"3-4"}
+      ].forEach(part=>{
+        const grid=buildGrid(item.parsed,mapping,part.firstBar);
+        const contents=renderPreset(grid,bpm);
+        generated.push({
+          name:`${base}_Bars_${part.label}.XOPreset`,
+          contents
+        });
+      });
+    });
+
+    $("downloadAllBtn").disabled=false;
+    setStatus("convertStatus",`Generated ${generated.length} separate XO preset file(s). Click Download ZIP.`,true);
+    $("outputList").innerHTML = generated.map(g=>`<div>${escapeHtml(g.name)}</div>`).join("");
+  }
+
+  function escapeHtml(s){
+    return s.replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;"}[c]));
+  }
+
+  function downloadBlob(text,filename){
+    const blob=new Blob([text],{type:"application/octet-stream"});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement("a");
+    a.href=url;
+    a.download=filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1000);
+  }
+
+  function crc32(bytes){
+    let table = crc32.table;
+    if(!table){
+      table = new Uint32Array(256);
+      for(let n=0;n<256;n++){
+        let c=n;
+        for(let k=0;k<8;k++) c=(c&1)?(0xEDB88320^(c>>>1)):(c>>>1);
+        table[n]=c>>>0;
+      }
+      crc32.table=table;
+    }
+
+    let c=0xFFFFFFFF;
+    for(let i=0;i<bytes.length;i++){
+      c=table[(c^bytes[i])&0xFF]^(c>>>8);
+    }
+    return (c^0xFFFFFFFF)>>>0;
+  }
+
+  function pushU16(arr,n){
+    arr.push(n&255,(n>>>8)&255);
+  }
+
+  function pushU32(arr,n){
+    arr.push(n&255,(n>>>8)&255,(n>>>16)&255,(n>>>24)&255);
+  }
+
+  function dosDateTime(date=new Date()){
+    let year=Math.max(1980,date.getFullYear());
+    let dosTime =
+      ((date.getHours()&31)<<11) |
+      ((date.getMinutes()&63)<<5) |
+      ((Math.floor(date.getSeconds()/2))&31);
+
+    let dosDate =
+      (((year-1980)&127)<<9) |
+      (((date.getMonth()+1)&15)<<5) |
+      (date.getDate()&31);
+
+    return {dosTime,dosDate};
+  }
+
+  function makeZip(files){
+    const enc=new TextEncoder();
+    const out=[];
+    const central=[];
+    let offset=0;
+    const {dosTime,dosDate}=dosDateTime();
+
+    for(const file of files){
+      const nameBytes=enc.encode(file.name);
+      const dataBytes=enc.encode(file.contents);
+      const crc=crc32(dataBytes);
+
+      const local=[];
+      pushU32(local,0x04034b50);
+      pushU16(local,20);
+      pushU16(local,0x0800);
+      pushU16(local,0);
+      pushU16(local,dosTime);
+      pushU16(local,dosDate);
+      pushU32(local,crc);
+      pushU32(local,dataBytes.length);
+      pushU32(local,dataBytes.length);
+      pushU16(local,nameBytes.length);
+      pushU16(local,0);
+
+      out.push(new Uint8Array(local),nameBytes,dataBytes);
+
+      const cd=[];
+      pushU32(cd,0x02014b50);
+      pushU16(cd,20);
+      pushU16(cd,20);
+      pushU16(cd,0x0800);
+      pushU16(cd,0);
+      pushU16(cd,dosTime);
+      pushU16(cd,dosDate);
+      pushU32(cd,crc);
+      pushU32(cd,dataBytes.length);
+      pushU32(cd,dataBytes.length);
+      pushU16(cd,nameBytes.length);
+      pushU16(cd,0);
+      pushU16(cd,0);
+      pushU16(cd,0);
+      pushU16(cd,0);
+      pushU32(cd,0);
+      pushU32(cd,offset);
+
+      central.push(new Uint8Array(cd),nameBytes);
+      offset += local.length + nameBytes.length + dataBytes.length;
+    }
+
+    let centralSize=0;
+    for(const part of central) centralSize+=part.length;
+    const centralOffset=offset;
+
+    const end=[];
+    pushU32(end,0x06054b50);
+    pushU16(end,0);
+    pushU16(end,0);
+    pushU16(end,files.length);
+    pushU16(end,files.length);
+    pushU32(end,centralSize);
+    pushU32(end,centralOffset);
+    pushU16(end,0);
+
+    return new Blob([...out,...central,new Uint8Array(end)],{
+      type:"application/zip"
+    });
+  }
+
+  function downloadAll(){
+    if(!generated.length) return;
+
+    const zip=makeZip(generated);
+    const url=URL.createObjectURL(zip);
+    const a=document.createElement("a");
+
+    const prefix=safeBaseName($("prefix").value.trim() || "XO");
+    a.href=url;
+    a.download=`${prefix}_XO_Presets.zip`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(()=>URL.revokeObjectURL(url),1500);
+  }
+
+  function updateReady(){
+    const ready=parsedMidis.length>0 && !!templateText;
+    $("convertBtn").disabled=!ready;
+    if(ready){
+      $("convertStatus").className="status";
+      $("convertStatus").textContent="Ready to convert.";
+    }
+  }
+
+  setupDrop("midiDrop","midiInput",handleMidis);
+  setupDrop("xoDrop","xoInput",handleXO);
+
+  $("applyBap").addEventListener("click",applyBapMap);
+  $("clearMap").addEventListener("click",clearMap);
+  $("convertBtn").addEventListener("click",generate);
+  $("downloadAllBtn").addEventListener("click",downloadAll);
+})();
+</script>
+</body>
+</html>
